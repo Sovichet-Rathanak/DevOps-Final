@@ -1,0 +1,7 @@
+Tables_in_rathanak-db
+failed_jobs
+migrations
+password_reset_tokens
+personal_access_tokens
+sessions
+users

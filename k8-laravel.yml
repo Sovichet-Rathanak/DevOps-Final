@@ -1,0 +1,97 @@
+# ConfigMap for PHP config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: php-config
+data:
+  php.ini: |
+    memory_limit=512M
+    upload_max_filesize=100M
+    post_max_size=100M
+---
+# ConfigMap for NGINX config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        index index.php index.html;
+        root /var/www/public;
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        }
+        location ~ /\.ht {
+            deny all;
+        }
+    }
+---
+# Deployment with PHP + NGINX + MySQL in one pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: laravel-app
+  template:
+    metadata:
+      labels:
+        app: laravel-app
+    spec:
+      containers:
+        - name: php
+          image: laravel-php:latest
+          imagePullPolicy: Never # Use local image only
+          ports:
+            - containerPort: 22
+          volumeMounts:
+            - name: laravel-code
+              mountPath: /var/www
+            - name: php-ini
+              mountPath: /usr/local/etc/php/php.ini
+              subPath: php.ini
+          command: ["sh", "-c", "service ssh start && php-fpm"]
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: laravel-code
+              mountPath: /var/www
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: Hello@123
+            - name: MYSQL_DATABASE
+              value: yourname-db
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: laravel-code
+          emptyDir: {}
+        - name: mysql-data
+          emptyDir: {}
+        - name: php-ini
+          configMap:
+            name: php-config
+        - name: nginx-conf
+          configMap:
+            name: nginx-config
